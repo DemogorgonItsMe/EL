@@ -13,12 +13,14 @@
 local LuxUI = {}
 LuxUI.__index = LuxUI
 
--- Services
+-- Сервисы
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
+local TextService = game:GetService("TextService")
+local HttpService = game:GetService("HttpService")
 
--- Constants
+-- Константы
 local DEFAULT_THEME = {
     Main = Color3.fromRGB(25, 25, 35),
     Secondary = Color3.fromRGB(35, 35, 45),
@@ -35,59 +37,76 @@ local EASE_DIRECTION = Enum.EasingDirection.InOut
 local EASE_STYLE = Enum.EasingStyle.Quint
 local TWEEN_TIME = 0.25
 
--- Utility functions
-local function create(class, props)
-    local instance = Instance.new(class)
-    for prop, value in pairs(props) do
-        if prop ~= "Parent" then
-            if pcall(function() return instance[prop] end) then
-                instance[prop] = value
+-- Защитная функция создания объектов
+local function SafeCreate(class, props)
+    local success, instance = pcall(function()
+        local inst = Instance.new(class)
+        for prop, value in pairs(props) do
+            if prop ~= "Parent" then
+                if pcall(function() return inst[prop] end) then
+                    inst[prop] = value
+                end
             end
         end
-    end
-    if props.Parent then
-        instance.Parent = props.Parent
-    end
-    return instance
+        if props.Parent then
+            inst.Parent = props.Parent
+        end
+        return inst
+    end)
+    return success and instance or nil
 end
 
-local function tween(object, properties, duration, easingStyle, easingDirection)
+-- Защитная функция твинов
+local function SafeTween(object, properties, duration, easingStyle, easingDirection)
+    if not object or not properties then return nil end
     local tweenInfo = TweenInfo.new(
         duration or TWEEN_TIME,
         easingStyle or EASE_STYLE,
         easingDirection or EASE_DIRECTION
     )
-    local tween = TweenService:Create(object, tweenInfo, properties)
-    tween:Play()
-    return tween
+    local success, tween = pcall(function()
+        return TweenService:Create(object, tweenInfo, properties)
+    end)
+    if success and tween then
+        pcall(tween.Play, tween)
+        return tween
+    end
+    return nil
 end
 
-local function isMobile()
+-- Проверка мобильного устройства
+local function IsMobile()
     return UserInputService.TouchEnabled and not UserInputService.MouseEnabled
 end
 
--- Main UI creation
+-- Инициализация LuxUI
 function LuxUI.new(options)
     options = options or {}
     
     local self = setmetatable({}, LuxUI)
     
-    self.theme = options.Theme or DEFAULT_THEME
+    -- Защитная инициализация темы
+    self.theme = {}
+    for k, v in pairs(DEFAULT_THEME) do
+        self.theme[k] = (options.Theme and options.Theme[k]) or v
+    end
+    
     self.configKey = options.ConfigKey or "LuxUIConfig"
     self.windows = {}
     self.notifications = {}
     self.open = false
     
-    -- Create main screen gui
-    self.gui = create("ScreenGui", {
+    -- Создание основного GUI с защитой
+    self.gui = SafeCreate("ScreenGui", {
         Name = "LuxUI",
         ResetOnSpawn = false,
         ZIndexBehavior = Enum.ZIndexBehavior.Global,
-        DisplayOrder = 999
-    })
+        DisplayOrder = 999,
+        Parent = options.Parent or game:GetService("CoreGui")
+    }) or error("Не удалось создать ScreenGui")
     
-    -- Create notification holder
-    self.notificationHolder = create("Frame", {
+    -- Создание контейнера уведомлений
+    self.notificationHolder = SafeCreate("Frame", {
         Name = "Notifications",
         Parent = self.gui,
         BackgroundTransparency = 1,
@@ -95,9 +114,9 @@ function LuxUI.new(options)
         ZIndex = 100
     })
     
-    -- Create blur effect
-    if not isMobile() then
-        self.blur = create("BlurEffect", {
+    -- Создание эффекта размытия (только для ПК)
+    if not IsMobile() then
+        self.blur = SafeCreate("BlurEffect", {
             Name = "UIBlur",
             Parent = game:GetService("Lighting"),
             Size = 0,
@@ -105,18 +124,21 @@ function LuxUI.new(options)
         })
     end
     
-    -- Apply saved config if exists
-    if options.LoadConfig and isfile and isfile(self.configKey .. ".luxui") then
-        self:LoadConfig()
+    -- Загрузка конфигурации с защитой
+    if options.LoadConfig and isfile and readfile then
+        pcall(function() self:LoadConfig() end)
     end
     
     return self
 end
 
--- Window creation
+-- Создание окна с полной защитой
 function LuxUI:CreateWindow(title, options)
     options = options or {}
     local windowId = #self.windows + 1
+    
+    -- Проверка и установка значений по умолчанию
+    if not self.theme then self.theme = DEFAULT_THEME end
     
     local window = {
         Id = windowId,
@@ -127,8 +149,8 @@ function LuxUI:CreateWindow(title, options)
         Position = options.Position or UDim2.new(0.5, -250, 0.5, -250)
     }
     
-    -- Main window frame
-    window.Main = create("Frame", {
+    -- Основной фрейм окна
+    window.Main = SafeCreate("Frame", {
         Name = "Window" .. windowId,
         Parent = self.gui,
         BackgroundColor3 = self.theme.Main,
@@ -140,8 +162,10 @@ function LuxUI:CreateWindow(title, options)
         AnchorPoint = Vector2.new(0.5, 0.5)
     })
     
-    -- Shadow effect
-    create("ImageLabel", {
+    if not window.Main then return nil end
+    
+    -- Тень окна
+    SafeCreate("ImageLabel", {
         Name = "Shadow",
         Parent = window.Main,
         BackgroundTransparency = 1,
@@ -155,8 +179,8 @@ function LuxUI:CreateWindow(title, options)
         ZIndex = -1
     })
     
-    -- Top bar
-    window.TopBar = create("Frame", {
+    -- Верхняя панель
+    window.TopBar = SafeCreate("Frame", {
         Name = "TopBar",
         Parent = window.Main,
         BackgroundColor3 = self.theme.Secondary,
@@ -165,8 +189,8 @@ function LuxUI:CreateWindow(title, options)
         ZIndex = 2
     })
     
-    -- Title
-    create("TextLabel", {
+    -- Заголовок окна
+    SafeCreate("TextLabel", {
         Name = "Title",
         Parent = window.TopBar,
         BackgroundTransparency = 1,
@@ -179,8 +203,8 @@ function LuxUI:CreateWindow(title, options)
         TextXAlignment = Enum.TextXAlignment.Left
     })
     
-    -- Close button
-    window.CloseButton = create("ImageButton", {
+    -- Кнопка закрытия
+    window.CloseButton = SafeCreate("ImageButton", {
         Name = "CloseButton",
         Parent = window.TopBar,
         BackgroundTransparency = 1,
@@ -193,8 +217,8 @@ function LuxUI:CreateWindow(title, options)
         ZIndex = 2
     })
     
-    -- Tab bar
-    window.TabBar = create("Frame", {
+    -- Панель вкладок
+    window.TabBar = SafeCreate("Frame", {
         Name = "TabBar",
         Parent = window.Main,
         BackgroundColor3 = self.theme.Secondary,
@@ -204,8 +228,8 @@ function LuxUI:CreateWindow(title, options)
         ZIndex = 2
     })
     
-    -- Tab container
-    window.TabContainer = create("Frame", {
+    -- Контейнер вкладок
+    window.TabContainer = SafeCreate("Frame", {
         Name = "TabContainer",
         Parent = window.Main,
         BackgroundTransparency = 1,
@@ -214,26 +238,26 @@ function LuxUI:CreateWindow(title, options)
         ClipsDescendants = true
     })
     
-    -- Tab list layout
-    create("UIListLayout", {
+    -- Layout для вкладок
+    SafeCreate("UIListLayout", {
         Parent = window.TabBar,
         FillDirection = Enum.FillDirection.Horizontal,
         SortOrder = Enum.SortOrder.LayoutOrder,
         Padding = UDim.new(0, 5)
     })
     
-    -- Close button event
-    window.CloseButton.MouseButton1Click:Connect(function()
-        self:ToggleWindow(windowId)
-    end)
+    -- Обработчик кнопки закрытия
+    if window.CloseButton then
+        window.CloseButton.MouseButton1Click:Connect(function()
+            pcall(function() self:ToggleWindow(windowId) end)
+        end)
+    end
     
-    -- Dragging functionality
-    local dragging
-    local dragInput
-    local dragStart
-    local startPos
+    -- Функционал перетаскивания окна
+    local dragging, dragInput, dragStart, startPos
     
-    local function update(input)
+    local function UpdateDrag(input)
+        if not window.Main or not dragStart or not startPos then return end
         local delta = input.Position - dragStart
         window.Main.Position = UDim2.new(
             startPos.X.Scale, 
@@ -243,43 +267,48 @@ function LuxUI:CreateWindow(title, options)
         )
     end
     
-    window.TopBar.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = true
-            dragStart = input.Position
-            startPos = window.Main.Position
-            
-            input.Changed:Connect(function()
-                if input.UserInputState == Enum.UserInputState.End then
-                    dragging = false
-                end
-            end)
-        end
-    end)
-    
-    window.TopBar.InputChanged:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-            dragInput = input
-        end
-    end)
+    if window.TopBar then
+        window.TopBar.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                dragging = true
+                dragStart = input.Position
+                startPos = window.Main.Position
+                
+                input.Changed:Connect(function()
+                    if input.UserInputState == Enum.UserInputState.End then
+                        dragging = false
+                    end
+                end)
+            end
+        end)
+        
+        window.TopBar.InputChanged:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+                dragInput = input
+            end
+        end)
+    end
     
     UserInputService.InputChanged:Connect(function(input)
         if input == dragInput and dragging then
-            update(input)
+            pcall(UpdateDrag, input)
         end
     end)
     
     table.insert(self.windows, window)
     
-    -- Window methods
+    -- Методы окна
     local windowMethods = {}
     
     function windowMethods:Toggle()
-        self:ToggleWindow(windowId)
+        pcall(function() self:ToggleWindow(windowId) end)
     end
     
     function windowMethods:AddTab(name, icon)
+        if not window or not window.TabBar or not window.TabContainer then return nil end
+        
         local tabId = #window.Tabs + 1
+        name = tostring(name or "Tab " .. tabId)
         
         local tab = {
             Id = tabId,
@@ -288,8 +317,8 @@ function LuxUI:CreateWindow(title, options)
             Active = false
         }
         
-        -- Tab button
-        tab.Button = create("TextButton", {
+        -- Кнопка вкладки
+        tab.Button = SafeCreate("TextButton", {
             Name = "Tab" .. tabId,
             Parent = window.TabBar,
             BackgroundColor3 = self.theme.Secondary,
@@ -304,8 +333,8 @@ function LuxUI:CreateWindow(title, options)
             LayoutOrder = tabId
         })
         
-        -- Tab container
-        tab.Container = create("ScrollingFrame", {
+        -- Контейнер вкладки
+        tab.Container = SafeCreate("ScrollingFrame", {
             Name = "Container" .. tabId,
             Parent = window.TabContainer,
             BackgroundTransparency = 1,
@@ -316,14 +345,16 @@ function LuxUI:CreateWindow(title, options)
             Visible = false
         })
         
-        -- Tab container layout
-        create("UIListLayout", {
+        if not tab.Container then return nil end
+        
+        -- Layout контейнера
+        SafeCreate("UIListLayout", {
             Parent = tab.Container,
             SortOrder = Enum.SortOrder.LayoutOrder,
             Padding = UDim.new(0, 10)
         })
         
-        create("UIPadding", {
+        SafeCreate("UIPadding", {
             Parent = tab.Container,
             PaddingLeft = UDim.new(0, 15),
             PaddingRight = UDim.new(0, 15),
@@ -331,40 +362,44 @@ function LuxUI:CreateWindow(title, options)
             PaddingBottom = UDim.new(0, 15)
         })
         
-        -- Tab button events
-        tab.Button.MouseEnter:Connect(function()
-            if not tab.Active then
-                tween(tab.Button, {TextColor3 = self.theme.Text})
-            end
-        end)
+        -- Обработчики кнопки вкладки
+        if tab.Button then
+            tab.Button.MouseEnter:Connect(function()
+                if not tab.Active then
+                    SafeTween(tab.Button, {TextColor3 = self.theme.Text})
+                end
+            end)
+            
+            tab.Button.MouseLeave:Connect(function()
+                if not tab.Active then
+                    SafeTween(tab.Button, {TextColor3 = self.theme.TextSecondary})
+                end
+            end)
+            
+            tab.Button.MouseButton1Click:Connect(function()
+                pcall(function() self:SwitchTab(windowId, tabId) end)
+            end)
+        end
         
-        tab.Button.MouseLeave:Connect(function()
-            if not tab.Active then
-                tween(tab.Button, {TextColor3 = self.theme.TextSecondary})
-            end
-        end)
-        
-        tab.Button.MouseButton1Click:Connect(function()
-            self:SwitchTab(windowId, tabId)
-        end)
-        
-        -- Activate first tab
+        -- Активация первой вкладки
         if tabId == 1 then
-            self:SwitchTab(windowId, 1)
+            pcall(function() self:SwitchTab(windowId, 1) end)
         end
         
         table.insert(window.Tabs, tab)
         
-        -- Tab methods
+        -- Методы вкладки
         local tabMethods = {}
         
         function tabMethods:AddLabel(text)
-            local label = create("TextLabel", {
+            if not tab.Container then return nil end
+            
+            local label = SafeCreate("TextLabel", {
                 Parent = tab.Container,
                 BackgroundTransparency = 1,
                 Size = UDim2.new(1, 0, 0, 20),
                 Font = Enum.Font.Gotham,
-                Text = text,
+                Text = tostring(text or ""),
                 TextColor3 = self.theme.Text,
                 TextSize = 14,
                 TextXAlignment = Enum.TextXAlignment.Left,
@@ -375,9 +410,12 @@ function LuxUI:CreateWindow(title, options)
         end
         
         function tabMethods:AddButton(text, callback)
-            local buttonId = #tab.Container:GetChildren() + 1
+            if not tab.Container then return nil end
             
-            local button = create("TextButton", {
+            local buttonId = #tab.Container:GetChildren() + 1
+            text = tostring(text or "Button " .. buttonId)
+            
+            local button = SafeCreate("TextButton", {
                 Name = "Button" .. buttonId,
                 Parent = tab.Container,
                 BackgroundColor3 = self.theme.Secondary,
@@ -391,27 +429,29 @@ function LuxUI:CreateWindow(title, options)
                 LayoutOrder = buttonId
             })
             
-            create("UICorner", {
+            if not button then return nil end
+            
+            SafeCreate("UICorner", {
                 Parent = button,
                 CornerRadius = UDim.new(0, 5)
             })
             
-            -- Button effects
+            -- Эффекты кнопки
             button.MouseEnter:Connect(function()
-                tween(button, {BackgroundColor3 = Color3.fromRGB(
-                    math.floor(self.theme.Secondary.R * 255 + 15),
-                    math.floor(self.theme.Secondary.G * 255 + 15),
-                    math.floor(self.theme.Secondary.B * 255 + 15)
+                SafeTween(button, {BackgroundColor3 = Color3.fromRGB(
+                    math.floor((self.theme.Secondary.R * 255) + 15),
+                    math.floor((self.theme.Secondary.G * 255) + 15),
+                    math.floor((self.theme.Secondary.B * 255) + 15)
                 )})
             end)
             
             button.MouseLeave:Connect(function()
-                tween(button, {BackgroundColor3 = self.theme.Secondary})
+                SafeTween(button, {BackgroundColor3 = self.theme.Secondary})
             end)
             
             button.MouseButton1Click:Connect(function()
-                if callback then
-                    callback()
+                if type(callback) == "function" then
+                    pcall(callback)
                 end
             end)
             
