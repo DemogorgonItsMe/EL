@@ -1,18 +1,10 @@
---[[
-    LuxUI - 100% рабочая UI библиотека для Roblox
-    Версия 3.0 - Полностью протестирована и защищена от ошибок
-    Гарантия работы без ошибок типа "attempt to index nil"
-]]
-
 local LuxUI = {}
 LuxUI.__index = LuxUI
 
--- Сервисы
+
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local TextService = game:GetService("TextService")
-
--- Константы
 local DEFAULT_THEME = {
     Main = Color3.fromRGB(25, 25, 35),
     Secondary = Color3.fromRGB(35, 35, 45),
@@ -29,7 +21,6 @@ local EASE_DIRECTION = Enum.EasingDirection.InOut
 local EASE_STYLE = Enum.EasingStyle.Quint
 local TWEEN_TIME = 0.25
 
--- Защищенное создание экземпляров
 local function SafeInstance(className, properties)
     local success, instance = pcall(function()
         local inst = Instance.new(className)
@@ -45,7 +36,6 @@ local function SafeInstance(className, properties)
     return success and instance or nil
 end
 
--- Защищенный твин
 local function SafeTween(object, properties, duration)
     if not object or not properties then return nil end
     local success, tween = pcall(function()
@@ -57,18 +47,15 @@ local function SafeTween(object, properties, duration)
     return success and tween or nil
 end
 
--- Проверка мобильного устройства
 local function IsMobile()
     return UserInputService.TouchEnabled and not UserInputService.MouseEnabled
 end
 
--- Инициализация библиотеки
 function LuxUI.new(options)
     options = options or {}
     
     local self = setmetatable({}, LuxUI)
     
-    -- Защитная инициализация темы
     self.theme = table.clone(DEFAULT_THEME)
     if type(options.Theme) == "table" then
         for k, v in pairs(options.Theme) do
@@ -78,7 +65,6 @@ function LuxUI.new(options)
         end
     end
     
-    -- Создание основного GUI
     self.gui = SafeInstance("ScreenGui", {
         Name = "LuxUI",
         ResetOnSpawn = false,
@@ -88,7 +74,6 @@ function LuxUI.new(options)
     })
     if not self.gui then return nil end
     
-    -- Контейнер уведомлений
     self.notificationHolder = SafeInstance("Frame", {
         Parent = self.gui,
         BackgroundTransparency = 1,
@@ -96,7 +81,6 @@ function LuxUI.new(options)
         ZIndex = 100
     })
     
-    -- Эффект размытия (только для ПК)
     if not IsMobile() then
         self.blur = SafeInstance("BlurEffect", {
             Parent = game:GetService("Lighting"),
@@ -111,7 +95,6 @@ function LuxUI.new(options)
     return self
 end
 
--- Создание окна
 function LuxUI:CreateWindow(title, options)
     if not self or not self.gui then return nil end
     
@@ -127,7 +110,6 @@ function LuxUI:CreateWindow(title, options)
         Position = options.Position or UDim2.new(0.5, -250, 0.5, -250)
     }
     
-    -- Основной фрейм окна
     window.Main = SafeInstance("Frame", {
         Parent = self.gui,
         BackgroundColor3 = self.theme.Main,
@@ -140,7 +122,6 @@ function LuxUI:CreateWindow(title, options)
     })
     if not window.Main then return nil end
     
-    -- Тень
     SafeInstance("ImageLabel", {
         Parent = window.Main,
         BackgroundTransparency = 1,
@@ -154,7 +135,6 @@ function LuxUI:CreateWindow(title, options)
         ZIndex = -1
     })
     
-    -- Верхняя панель
     window.TopBar = SafeInstance("Frame", {
         Parent = window.Main,
         BackgroundColor3 = self.theme.Secondary,
@@ -163,7 +143,6 @@ function LuxUI:CreateWindow(title, options)
         ZIndex = 2
     })
     
-    -- Заголовок
     SafeInstance("TextLabel", {
         Parent = window.TopBar,
         BackgroundTransparency = 1,
@@ -176,7 +155,6 @@ function LuxUI:CreateWindow(title, options)
         TextXAlignment = Enum.TextXAlignment.Left
     })
     
-    -- Кнопка закрытия
     window.CloseButton = SafeInstance("ImageButton", {
         Parent = window.TopBar,
         BackgroundTransparency = 1,
@@ -189,7 +167,6 @@ function LuxUI:CreateWindow(title, options)
         ZIndex = 2
     })
     
-    -- Панель вкладок
     window.TabBar = SafeInstance("Frame", {
         Parent = window.Main,
         BackgroundColor3 = self.theme.Secondary,
@@ -208,7 +185,6 @@ function LuxUI:CreateWindow(title, options)
         ClipsDescendants = true
     })
     
-    -- Layout вкладок
     SafeInstance("UIListLayout", {
         Parent = window.TabBar,
         FillDirection = Enum.FillDirection.Horizontal,
@@ -216,14 +192,12 @@ function LuxUI:CreateWindow(title, options)
         Padding = UDim.new(0, 5)
     })
     
-    -- Обработчик закрытия
     if window.CloseButton then
         window.CloseButton.MouseButton1Click:Connect(function()
             self:ToggleWindow(windowId)
         end)
     end
     
-    -- Функционал перетаскивания
     local dragging, dragInput, dragStart, startPos
     
     local function UpdateDrag(input)
@@ -267,7 +241,6 @@ function LuxUI:CreateWindow(title, options)
     
     table.insert(self.windows, window)
     
-    -- Методы окна
     local windowMethods = {}
     
     function windowMethods:Toggle()
@@ -290,7 +263,6 @@ function LuxUI:CreateWindow(title, options)
             Active = false
         }
         
-        -- Кнопка вкладки
         tab.Button = SafeInstance("TextButton", {
             Parent = window.TabBar,
             BackgroundColor3 = self.theme.Secondary,
@@ -305,7 +277,6 @@ function LuxUI:CreateWindow(title, options)
             LayoutOrder = tabId
         })
         
-        -- Контейнер вкладки
         tab.Container = SafeInstance("ScrollingFrame", {
             Parent = window.TabContainer,
             BackgroundTransparency = 1,
@@ -316,7 +287,6 @@ function LuxUI:CreateWindow(title, options)
             Visible = false
         })
         
-        -- Layout контейнера
         SafeInstance("UIListLayout", {
             Parent = tab.Container,
             SortOrder = Enum.SortOrder.LayoutOrder,
@@ -331,7 +301,6 @@ function LuxUI:CreateWindow(title, options)
             PaddingBottom = UDim.new(0, 15)
         })
         
-        -- Обработчики кнопки вкладки
         if tab.Button then
             tab.Button.MouseEnter:Connect(function()
                 if not tab.Active then
@@ -350,14 +319,12 @@ function LuxUI:CreateWindow(title, options)
             end)
         end
         
-        -- Активация первой вкладки
         if tabId == 1 then
             self:SwitchTab(windowId, 1)
         end
         
         table.insert(window.Tabs, tab)
         
-        -- Методы вкладки
         local tabMethods = {}
         
         function tabMethods:AddLabel(text)
@@ -428,7 +395,6 @@ function LuxUI:CreateWindow(title, options)
     return windowMethods
 end
 
--- Переключение окна
 function LuxUI:ToggleWindow(windowId)
     local window = self.windows[windowId]
     if not window or not window.Main then return end
@@ -458,7 +424,6 @@ function LuxUI:ToggleWindow(windowId)
     end
 end
 
--- Переключение вкладок
 function LuxUI:SwitchTab(windowId, tabId)
     local window = self.windows[windowId]
     if not window then return end
@@ -479,7 +444,6 @@ function LuxUI:SwitchTab(windowId, tabId)
         end
     end
     
-    -- Показать выбранную вкладку
     tab.Active = true
     if tab.Container then
         tab.Container.Visible = true
@@ -489,7 +453,6 @@ function LuxUI:SwitchTab(windowId, tabId)
     end
 end
 
--- Уведомления
 function LuxUI:Notify(title, message, notificationType, duration)
     if not self.notificationHolder then return end
     
@@ -559,7 +522,6 @@ function LuxUI:Notify(title, message, notificationType, duration)
         TextXAlignment = Enum.TextXAlignment.Left
     })
     
-    -- Автоматический размер
     local textSize = TextService:GetTextSize(message, 13, Enum.Font.Gotham, Vector2.new(280, math.huge))
     local totalHeight = math.min(textSize.Y + 45, 200)
     
@@ -568,12 +530,10 @@ function LuxUI:Notify(title, message, notificationType, duration)
         messageLabel.Size = UDim2.new(1, -20, 0, textSize.Y)
     end
     
-    -- Анимация появления
     SafeTween(notification, {
         Position = UDim2.new(1, -10, 1, -10 - totalHeight)
     })
     
-    -- Автоматическое закрытие
     task.delay(duration, function()
         SafeTween(notification, {
             Position = UDim2.new(1, 10, 1, 10)
